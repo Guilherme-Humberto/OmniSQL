@@ -1,15 +1,18 @@
 import { flushSync } from 'react-dom'
 import { create } from 'zustand'
+import { ThemeMode } from '../constants/app-constants'
 
-export type Theme = 'light' | 'dark'
+export type Theme = ThemeMode
 
 const STORAGE_KEY = 'sql-editor-theme'
 
 function initialTheme(): Theme {
   const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
-  if (saved === 'light' || saved === 'dark') return saved
+  if (saved === ThemeMode.Light || saved === ThemeMode.Dark) return saved
   // No saved preference → follow the OS, defaulting to dark.
-  return typeof matchMedia !== 'undefined' && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  return typeof matchMedia !== 'undefined' && matchMedia('(prefers-color-scheme: light)').matches
+    ? ThemeMode.Light
+    : ThemeMode.Dark
 }
 
 /**
@@ -51,5 +54,5 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     localStorage.setItem(STORAGE_KEY, theme)
     withTransition(() => set({ theme }))
   },
-  toggle: () => get().setTheme(get().theme === 'dark' ? 'light' : 'dark'),
+  toggle: () => get().setTheme(get().theme === ThemeMode.Dark ? ThemeMode.Light : ThemeMode.Dark),
 }))
