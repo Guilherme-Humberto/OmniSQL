@@ -4,7 +4,7 @@ export const databaseConnectionSchema = z.object({
   id: z.uuid(),
   name: z.string(),
   path: z.string(),
-  driver: z.literal('sqlite'),
+  driver: z.enum(['sqlite', 'postgres', 'mysql']),
 })
 
 export const databaseTableSchema = z.object({
@@ -33,6 +33,29 @@ export const databaseCellSchema = z.union([
   z.object({ type: z.literal('blob'), base64: z.string() }),
 ])
 
+export const databaseForeignKeySchema = z.object({
+  id: z.number(),
+  table: z.string(),
+  from: z.string(),
+  to: z.string().nullable(),
+})
+
+export const databaseForeignKeysByTableSchema = z.record(z.string(), z.array(databaseForeignKeySchema))
+
+export const databasePeekInputSchema = z.object({
+  connectionId: z.uuid(),
+  targetTable: z.string().min(1),
+  targetColumn: z.string().min(1),
+  value: z.union([z.string(), z.number()]),
+})
+
+export const databasePeekResultSchema = z.object({
+  targetTable: z.string(),
+  targetColumn: z.string(),
+  found: z.boolean(),
+  record: z.record(z.string(), databaseCellSchema).nullable(),
+})
+
 export const databaseQueryInputSchema = z.object({
   connectionId: z.uuid(),
   sql: z.string().trim().min(1).max(100_000),
@@ -51,6 +74,10 @@ export type DatabaseConnection = z.infer<typeof databaseConnectionSchema>
 export type DatabaseTable = z.infer<typeof databaseTableSchema>
 export type DatabaseColumn = z.infer<typeof databaseColumnSchema>
 export type DatabaseSchema = z.infer<typeof databaseSchemaSchema>
+export type DatabaseForeignKey = z.infer<typeof databaseForeignKeySchema>
+export type DatabaseForeignKeysByTable = z.infer<typeof databaseForeignKeysByTableSchema>
+export type DatabasePeekInput = z.infer<typeof databasePeekInputSchema>
+export type DatabasePeekResult = z.infer<typeof databasePeekResultSchema>
 export type DatabaseCell = z.infer<typeof databaseCellSchema>
 export type DatabaseQueryInput = z.infer<typeof databaseQueryInputSchema>
 export type DatabaseQueryResult = z.infer<typeof databaseQueryResultSchema>

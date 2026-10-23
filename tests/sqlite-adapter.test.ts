@@ -53,3 +53,33 @@ test('limita resultados grandes sem carregar todas as linhas', () => {
     database.close()
   }
 })
+
+test('detecta chaves estrangeiras e realiza peek de registro referenciado', () => {
+  const database = new SQLiteAdapter(':memory:')
+
+  try {
+    database.execute('CREATE TABLE authors (id INTEGER PRIMARY KEY, name TEXT, email TEXT)')
+    database.execute(
+      'CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT, author_id INTEGER REFERENCES authors(id))'
+    )
+    database.execute("INSERT INTO authors VALUES (10, 'Machado de Assis', 'machado@academia.org')")
+    database.execute("INSERT INTO books VALUES (1, 'Dom Casmurro', 10)")
+
+    const fks = database.listForeignKeys('books')
+    assert.equal(fks.length, 1)
+    assert.equal(fks[0]?.table, 'authors')
+    assert.equal(fks[0]?.from, 'author_id')
+    assert.equal(fks[0]?.to, 'id')
+
+    const peek = database.peekRecord('authors', 'id', 10)
+    assert.equal(peek.found, true)
+    assert.equal(peek.record?.name, 'Machado de Assis')
+    assert.equal(peek.record?.email, 'machado@academia.org')
+
+    const peekNotFound = database.peekRecord('authors', 'id', 999)
+    assert.equal(peekNotFound.found, false)
+    assert.equal(peekNotFound.record, null)
+  } finally {
+    database.close()
+  }
+})

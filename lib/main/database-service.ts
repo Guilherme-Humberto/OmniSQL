@@ -4,10 +4,18 @@ import { basename, join, resolve } from 'node:path'
 import type {
   DatabaseColumn,
   DatabaseConnection,
+  DatabaseForeignKey,
+  DatabasePeekResult,
   DatabaseQueryResult,
   DatabaseSchema,
   DatabaseTable,
 } from '@/conveyor/database-contracts'
+import type { ConnectionDraft } from '@/conveyor/connection-contracts'
+import { DatabaseDriver } from '@/app/constants/app-constants'
+import type { DatabaseAdapter } from './database-adapter'
+import { PostgresAdapter, type PostgresConfig } from './postgres-adapter'
+import { MySQLAdapter, type MySQLConfig } from './mysql-adapter'
+import { connectionStore } from './connection-store'
 import type {
   DatabaseWorkerCommand,
   DatabaseWorkerMessage,
@@ -17,7 +25,7 @@ import type {
 
 interface ManagedConnection {
   connection: DatabaseConnection
-  adapter: WorkerDatabaseAdapter
+  adapter: DatabaseAdapter
 }
 
 interface PendingRequest {
@@ -72,6 +80,21 @@ class WorkerDatabaseAdapter {
 
   listColumns(tableName: string): Promise<DatabaseColumn[]> {
     return this.request({ method: 'listColumns', argument: tableName })
+  }
+
+  listForeignKeys(tableName: string): Promise<DatabaseForeignKey[]> {
+    return this.request({ method: 'listForeignKeys', argument: tableName })
+  }
+
+  getAllForeignKeys(): Promise<Record<string, DatabaseForeignKey[]>> {
+    return this.request({ method: 'getAllForeignKeys' })
+  }
+
+  peekRecord(targetTable: string, targetColumn: string, value: string | number): Promise<DatabasePeekResult> {
+    return this.request({
+      method: 'peekRecord',
+      argument: { targetTable, targetColumn, value },
+    })
   }
 
   execute(sql: string): Promise<DatabaseQueryResult> {
@@ -145,8 +168,156 @@ export class DatabaseService {
     return this.getConnection(connectionId).adapter.listColumns(tableName)
   }
 
+  listForeignKeys(connectionId: string, tableName: string): Promise<DatabaseForeignKey[]> {
+    return this.getConnection(connectionId).adapter.listForeignKeys(tableName)
+  }
+
+  getAllForeignKeys(connectionId: string): Promise<Record<string, DatabaseForeignKey[]>> {
+    return this.getConnection(connectionId).adapter.getAllForeignKeys()
+  }
+
+  peekRecord(
+    connectionId: string,
+    targetTable: string,
+    targetColumn: string,
+    value: string | number
+  ): Promise<DatabasePeekResult> {
+    return this.getConnection(connectionId).adapter.peekRecord(targetTable, targetColumn, value)
+  }
+
   execute(connectionId: string, sql: string): Promise<DatabaseQueryResult> {
     return this.getConnection(connectionId).adapter.execute(sql)
+  }
+
+  async openPostgres(config: PostgresConfig, name?: string): Promise<DatabaseConnection> {
+    const connection: DatabaseConnection = {
+      id: randomUUID(),
+      name: name || `${config.host}:${config.port}/${config.database}`,
+      path: `postgres://${config.user}@${config.host}:${config.port}/${config.database}`,
+      driver: 'postgres',
+    }
+    const adapter = new PostgresAdapter(config)
+    try {
+      await adapter.getSchema()
+      this.connections.set(connection.id, { connection, adapter })
+      return connection
+    } catch (error) {
+      await adapter.close()
+      throw error
+    }
+  }
+
+  async openMySQL(config: MySQLConfig, name?: string): Promise<DatabaseConnection> {
+    const connection: DatabaseConnection = {
+      id: randomUUID(),
+      name: name || `${config.host}:${config.port}/${config.database}`,
+      path: `mysql://${config.user}@${config.host}:${config.port}/${config.database}`,
+      driver: 'mysql',
+    }
+    const adapter = new MySQLAdapter(config)
+    try {
+      await adapter.getSchema()
+      this.connections.set(connection.id, { connection, adapter })
+      return connection
+    } catch (error) {
+      await adapter.close()
+      throw error
+    }
+  }
+
+  async openFromDraft(draft: ConnectionDraft): Promise<DatabaseConnection> {
+    if (draft.config.driver === DatabaseDriver.SQLite) {
+      return this.openSQLite(draft.config.path)
+    }
+
+    const password = connectionStore.passwordFor(draft)
+
+    if (draft.config.driver === DatabaseDriver.PostgreSQL) {
+      return this.openPostgres(
+        {
+          host: draft.config.host,
+          port: draft.config.port,
+          user: draft.config.user,
+          password,
+          database: draft.config.database,
+          ssl: draft.config.ssl,
+        },
+        draft.name
+      )
+    }
+
+    if (draft.config.driver === DatabaseDriver.MySQL) {
+      return this.openMySQL(
+        {
+          host: draft.config.host,
+          port: draft.config.port,
+          user: draft.config.user,
+          password,
+          database: draft.config.database,
+          ssl: draft.config.ssl,
+        },
+        draft.name
+      )
+    }
+
+    throw new Error('Driver de banco não suportado.')
+  }
+
+  async testConnection(draft: ConnectionDraft): Promise<{ success: boolean; message?: string }> {
+    try {
+      if (draft.config.driver === DatabaseDriver.SQLite) {
+        const adapter = new WorkerDatabaseAdapter(draft.config.path)
+        try {
+          await adapter.listTables()
+          return { success: true, message: 'Arquivo SQLite acessível com sucesso!' }
+        } finally {
+          await adapter.close()
+        }
+      }
+
+      const password = connectionStore.passwordFor(draft)
+
+      if (draft.config.driver === DatabaseDriver.PostgreSQL) {
+        const adapter = new PostgresAdapter({
+          host: draft.config.host,
+          port: draft.config.port,
+          user: draft.config.user,
+          password,
+          database: draft.config.database,
+          ssl: draft.config.ssl,
+        })
+        try {
+          await adapter.listTables()
+          return { success: true, message: 'Conexão com PostgreSQL estabelecida com sucesso!' }
+        } finally {
+          await adapter.close()
+        }
+      }
+
+      if (draft.config.driver === DatabaseDriver.MySQL) {
+        const adapter = new MySQLAdapter({
+          host: draft.config.host,
+          port: draft.config.port,
+          user: draft.config.user,
+          password,
+          database: draft.config.database,
+          ssl: draft.config.ssl,
+        })
+        try {
+          await adapter.listTables()
+          return { success: true, message: 'Conexão com MySQL estabelecida com sucesso!' }
+        } finally {
+          await adapter.close()
+        }
+      }
+
+      return { success: false, message: 'Driver de banco não suportado.' }
+    } catch (err: unknown) {
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Falha ao conectar ao servidor.',
+      }
+    }
   }
 
   async close(connectionId: string): Promise<void> {

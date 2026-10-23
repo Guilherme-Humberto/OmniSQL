@@ -22,6 +22,15 @@ port.on('message', (message: DatabaseWorkerMessage) => {
       case 'listColumns':
         result = adapter.listColumns(message.argument)
         break
+      case 'listForeignKeys':
+        result = adapter.listForeignKeys(message.argument)
+        break
+      case 'getAllForeignKeys':
+        result = adapter.getAllForeignKeys()
+        break
+      case 'peekRecord':
+        result = adapter.peekRecord(message.argument.targetTable, message.argument.targetColumn, message.argument.value)
+        break
       case 'execute':
         result = adapter.execute(message.argument)
         break

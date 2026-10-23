@@ -3,6 +3,9 @@ import { z } from 'zod'
 import {
   databaseColumnsSchema,
   databaseConnectionSchema,
+  databaseForeignKeysByTableSchema,
+  databasePeekInputSchema,
+  databasePeekResultSchema,
   databaseQueryInputSchema,
   databaseQueryResultSchema,
   databaseSchemaSchema,
@@ -37,6 +40,14 @@ export const databaseModule = defineModule({
   schema: query(connectionIdSchema, ({ input }) => databaseSchemaSchema.parse(databaseService.getSchema(input))),
   columns: query(tableInputSchema, ({ input }) =>
     databaseColumnsSchema.parse(databaseService.listColumns(input.connectionId, input.tableName))
+  ),
+  foreignKeys: query(connectionIdSchema, async ({ input }) =>
+    databaseForeignKeysByTableSchema.parse(await databaseService.getAllForeignKeys(input))
+  ),
+  peekRecord: query(databasePeekInputSchema, async ({ input }) =>
+    databasePeekResultSchema.parse(
+      await databaseService.peekRecord(input.connectionId, input.targetTable, input.targetColumn, input.value)
+    )
   ),
   execute: command(databaseQueryInputSchema, ({ input }) =>
     databaseQueryResultSchema.parse(databaseService.execute(input.connectionId, input.sql))

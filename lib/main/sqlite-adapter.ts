@@ -3,6 +3,8 @@ import { performance } from 'node:perf_hooks'
 import type {
   DatabaseCell,
   DatabaseColumn,
+  DatabaseForeignKey,
+  DatabasePeekResult,
   DatabaseQueryResult,
   DatabaseSchema,
   DatabaseTable,
@@ -10,15 +12,12 @@ import type {
 
 const MAX_RESULT_ROWS = 1_000
 
-export interface DatabaseAdapter {
-  listTables(): DatabaseTable[]
-  getSchema(): DatabaseSchema
-  listColumns(tableName: string): DatabaseColumn[]
-  execute(sql: string): DatabaseQueryResult
-  close(): void
-}
+const EntityKind = {
+  Table: 'table',
+  View: 'view',
+} as const
 
-export class SQLiteAdapter implements DatabaseAdapter {
+export class SQLiteAdapter {
   private readonly database: DatabaseSync
 
   constructor(path: string) {
@@ -31,7 +30,7 @@ export class SQLiteAdapter implements DatabaseAdapter {
         "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name"
       )
       .all()
-      .map((row) => ({ name: String(row.name), kind: row.type === 'view' ? 'view' : 'table' }))
+      .map((row) => ({ name: String(row.name), kind: row.type === EntityKind.View ? EntityKind.View : EntityKind.Table }))
   }
 
   getSchema(): DatabaseSchema {
@@ -53,6 +52,71 @@ export class SQLiteAdapter implements DatabaseAdapter {
         notNull: row.notnull === 1,
         primaryKey: row.pk !== 0,
       }))
+  }
+
+  listForeignKeys(tableName: string): DatabaseForeignKey[] {
+    const escapedName = tableName.replaceAll('"', '""')
+    const rows = this.database.prepare(`PRAGMA foreign_key_list("${escapedName}")`).all()
+
+    return rows.map((row) => {
+      let targetColumn = row.to == null ? null : String(row.to)
+      if (!targetColumn) {
+        // Se a chave não especifica a coluna de destino, SQLite aponta para a PK da tabela pai
+        const targetTableEscaped = String(row.table).replaceAll('"', '""')
+        const targetCols = this.database.prepare(`PRAGMA table_info("${targetTableEscaped}")`).all()
+        const pkCol = targetCols.find((c) => Number(c.pk) > 0)
+        targetColumn = pkCol ? String(pkCol.name) : 'id'
+      }
+
+      return {
+        id: Number(row.id),
+        table: String(row.table),
+        from: String(row.from),
+        to: targetColumn,
+      }
+    })
+  }
+
+  getAllForeignKeys(): Record<string, DatabaseForeignKey[]> {
+    const tables = this.listTables()
+    const result: Record<string, DatabaseForeignKey[]> = {}
+    for (const table of tables) {
+      const fks = this.listForeignKeys(table.name)
+      if (fks.length > 0) {
+        result[table.name] = fks
+      }
+    }
+    return result
+  }
+
+  peekRecord(targetTable: string, targetColumn: string, value: string | number): DatabasePeekResult {
+    const escapedTable = targetTable.replaceAll('"', '""')
+    const escapedColumn = targetColumn.replaceAll('"', '""')
+    const statement = this.database.prepare(
+      `SELECT * FROM "${escapedTable}" WHERE "${escapedColumn}" = ? LIMIT 1`
+    )
+    const row = statement.get(value) as Record<string, unknown> | undefined
+
+    if (!row) {
+      return {
+        targetTable,
+        targetColumn,
+        found: false,
+        record: null,
+      }
+    }
+
+    const record: Record<string, DatabaseCell> = {}
+    for (const [key, val] of Object.entries(row)) {
+      record[key] = toDatabaseCell(val)
+    }
+
+    return {
+      targetTable,
+      targetColumn,
+      found: true,
+      record,
+    }
   }
 
   execute(sql: string): DatabaseQueryResult {
