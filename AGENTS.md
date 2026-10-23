@@ -48,14 +48,14 @@ Antes de reportar a conclusão de qualquer tarefa, o agente **DEVE executar e va
 
 ```bash
 # Execução da suíte completa de portões de qualidade
-npm run typecheck && npm run lint:check && npm run test:sqlite
+yarn typecheck && yarn lint:check && yarn test:sqlite
 ```
 
 | Portão | Comando | Critério de Aceite |
 | :--- | :--- | :--- |
-| **Portão 1: Tipagem Estrita** | `npm run typecheck` | **Zero erros** (`tsc --noEmit` em `tsconfig.node.json` e `tsconfig.web.json`). Proibido o uso de `any` sem justificativa formal. |
-| **Portão 2: Análise Estática** | `npm run lint:check` | **Zero avisos ou erros** de ESLint. Respeito estrito às regras de hooks do React. |
-| **Portão 3: Testes Automatizados** | `npm run test:sqlite` | **100% de sucesso** nos testes de adaptadores, workers, joins e serialização de dados. |
+| **Portão 1: Tipagem Estrita** | `yarn typecheck` | **Zero erros** (`tsc --noEmit` em `tsconfig.node.json` e `tsconfig.web.json`). Proibido o uso de `any` sem justificativa formal. |
+| **Portão 2: Análise Estática** | `yarn lint:check` | **Zero avisos ou erros** de ESLint. Respeito estrito às regras de hooks do React. |
+| **Portão 3: Testes Automatizados** | `yarn test:sqlite` | **100% de sucesso** nos testes de adaptadores, workers, joins e serialização de dados. |
 
 > ❌ **Falha em qualquer portão**: Se qualquer um dos comandos falhar, a tarefa está em estado inválido. O agente deve corrigir a causa raiz antes de prosseguir.
 
@@ -118,8 +118,8 @@ Antes de submeter o código ou solicitar feedback do usuário, responda afirmati
 - [ ] Eliminei todos os números mágicos e strings literais soltas, movendo-os para constantes ou enums?
 - [ ] A lógica de banco de dados pesada está sendo executada em Worker Thread sem travar a interface?
 - [ ] As senhas e dados sensíveis estão criptografados via `safeStorage`?
-- [ ] Executei `npm run typecheck` e obtive **zero erros**?
-- [ ] Executei `npm run lint:check` e obtive **zero erros**?
-- [ ] Executei `npm run test:sqlite` e todos os testes passaram?
+- [ ] Executei `yarn typecheck` e obtive **zero erros**?
+- [ ] Executei `yarn lint:check` e obtive **zero erros**?
+- [ ] Executei `yarn test:sqlite` e todos os testes passaram?
 - [ ] Atualizei a documentação correspondente em `specs/`?
 

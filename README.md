@@ -1,4 +1,4 @@
-# SQL Editor
+# OmniSql
 
 Aplicativo desktop para gerenciamento de bancos de dados e consultas SQL, desenvolvido com Electron, React e TypeScript. A interface utiliza styled-components.
 

@@ -71,7 +71,7 @@ This constitution defines the non-negotiable architectural principles, engineeri
 ## 5. Quality Gates & Verification Checklist
 
 Before any feature, refactor, or bugfix is considered ready, it must pass all three quality gates:
-1. **Type Safety**: `npm run typecheck` passes with zero TypeScript diagnostics.
-2. **Linting**: `npm run lint:check` passes without ESLint errors or style warnings.
-3. **Automated Testing**: `npm run test:sqlite` executes successfully with 100% passing tests for worker thread execution, blob serialization, schema inspection, and large result handling.
+1. **Type Safety**: `yarn typecheck` passes with zero TypeScript diagnostics.
+2. **Linting**: `yarn lint:check` passes without ESLint errors or style warnings.
+3. **Automated Testing**: `yarn test:sqlite` executes successfully with 100% passing tests for worker thread execution, blob serialization, schema inspection, and large result handling.
 
